@@ -7,20 +7,17 @@ interface TaskCardProps {
   task: Task;
   onMove: (id: string, direction: 'left' | 'right') => void;
   onDelete: (id: string) => void;
+  onEdit: (task: Task) => void; // New prop for editing
 }
 
-export default function TaskCard({ task, onMove, onDelete }: TaskCardProps) {
+export default function TaskCard({ task, onMove, onDelete, onEdit }: TaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const confirmDelete = () => {
     if (Platform.OS === 'web') {
-      // Use standard browser popup if testing on web
       const confirmed = window.confirm(`Are you sure you want to delete "${task.title}"?`);
-      if (confirmed) {
-        onDelete(task.id);
-      }
+      if (confirmed) onDelete(task.id);
     } else {
-      // Use native mobile popup if on iOS/Android
       Alert.alert(
         "Delete Task",
         `Are you sure you want to delete "${task.title}"?`,
@@ -32,35 +29,29 @@ export default function TaskCard({ task, onMove, onDelete }: TaskCardProps) {
     }
   };
 
-  // --- Updated Aesthetic Logic ---
-  let borderColor = task.color; // The side tag color
-  let bgColor = '#fff';         // The main card background
+  let borderColor = task.color; 
+  let bgColor = '#fff';         
   let cardOpacity = 1;
 
   if (task.status === 'listed') {
     borderColor = '#a0a0a0'; 
     cardOpacity = 0.7;
   } else if (task.status === 'completed') {
-    bgColor = '#d4edda'; // A nice light green background
-    // Notice we DON'T change the borderColor here, so it keeps the task's original color!
+    bgColor = '#d4edda'; 
   }
 
-  const showDeleteButton = isExpanded || task.status === 'completed';
+  const showActions = isExpanded || task.status === 'completed';
+  const deleteBtnColor = task.status === 'completed' ? '#27ae60' : '#ff4757';
 
   return (
-    <View style={[
-      styles.card, 
-      { borderLeftColor: borderColor, backgroundColor: bgColor, opacity: cardOpacity }
-    ]}>
+    <View style={[styles.card, { borderLeftColor: borderColor, backgroundColor: bgColor, opacity: cardOpacity }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => onMove(task.id, 'left')} style={styles.arrowButton}>
           <Text style={styles.arrowText}>{"<"}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} style={styles.titleContainer}>
-          <Text style={styles.title} numberOfLines={isExpanded ? undefined : 1}>
-            {task.title}
-          </Text>
+          <Text style={styles.title} numberOfLines={isExpanded ? undefined : 1}>{task.title}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => onMove(task.id, 'right')} style={styles.arrowButton}>
@@ -68,16 +59,30 @@ export default function TaskCard({ task, onMove, onDelete }: TaskCardProps) {
         </TouchableOpacity>
       </View>
 
-      {(isExpanded || showDeleteButton) && (
+      {(isExpanded || showActions) && (
         <View style={styles.detailsContainer}>
           {isExpanded && (
             <Text style={styles.description}>{task.description}</Text>
           )}
           
-          {showDeleteButton && (
-            <TouchableOpacity onPress={confirmDelete} style={styles.deleteButton}>
-              <Text style={styles.deleteText}>Delete</Text>
-            </TouchableOpacity>
+          {showActions && (
+            <View style={styles.actionButtons}>
+              {/* Edit Button */}
+              <TouchableOpacity 
+                onPress={() => onEdit(task)} 
+                style={styles.editButton}
+              >
+                <Text style={styles.buttonText}>Edit</Text>
+              </TouchableOpacity>
+
+              {/* Delete Button */}
+              <TouchableOpacity 
+                onPress={confirmDelete} 
+                style={[styles.deleteButton, { backgroundColor: deleteBtnColor }]}
+              >
+                <Text style={styles.buttonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       )}
@@ -87,7 +92,6 @@ export default function TaskCard({ task, onMove, onDelete }: TaskCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    // backgroundColor: '#fff', <-- Removed from here since we handle it dynamically now
     borderRadius: 8,
     marginVertical: 6,
     padding: 10,
@@ -105,15 +109,17 @@ const styles = StyleSheet.create({
   titleContainer: {
     flex: 1,
     alignItems: 'center',
+    paddingHorizontal: 10,
   },
   title: {
     fontSize: 14,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   arrowButton: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: 'rgba(0,0,0,0.05)',
     borderRadius: 4,
   },
   arrowText: {
@@ -125,7 +131,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)', // Made slightly more transparent to look good on green
+    borderTopColor: 'rgba(0,0,0,0.05)',
     alignItems: 'center',
   },
   description: {
@@ -134,13 +140,23 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: 'center',
   },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10, // Adds space between the buttons
+  },
+  editButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: '#3498db', // A nice clean blue
+  },
   deleteButton: {
-    backgroundColor: '#ff4757',
     paddingVertical: 6,
     paddingHorizontal: 16,
     borderRadius: 6,
   },
-  deleteText: {
+  buttonText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 12,
