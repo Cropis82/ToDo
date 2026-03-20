@@ -1,6 +1,7 @@
 // app/index.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions, SafeAreaView, TouchableOpacity, Modal, TextInput, Alert, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // NEW IMPORT
 import TaskCard from '../src/components/TaskCard';
 import { Task, ColumnStatus } from '../src/types';
 
@@ -32,19 +33,53 @@ const generateColorGrid = () => {
 const COLOR_GRID = generateColorGrid();
 const DEFAULT_COLOR = COLOR_GRID[4][0]; 
 
+const STORAGE_KEY = '@kanban_tasks'; // The name of our save file
+
 export default function AppBoard() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false); // Prevents saving an empty array on startup
+
+  // --- PERSISTENCY: LOAD DATA ---
+  useEffect(() => {
+    const loadTasks = async () => {
+      try {
+        const savedTasks = await AsyncStorage.getItem(STORAGE_KEY);
+        if (savedTasks !== null) {
+          setTasks(JSON.parse(savedTasks));
+        }
+      } catch (error) {
+        console.error("Failed to load tasks from storage", error);
+      } finally {
+        setIsLoaded(true); // Marks that we are done checking the hard drive
+      }
+    };
+    loadTasks();
+  }, []);
+
+  // --- PERSISTENCY: SAVE DATA ---
+  useEffect(() => {
+    // Only save IF the initial load has finished. Otherwise, we might overwrite 
+    // our saved data with the initial empty [] state!
+    if (!isLoaded) return; 
+
+    const saveTasks = async () => {
+      try {
+        const jsonValue = JSON.stringify(tasks);
+        await AsyncStorage.setItem(STORAGE_KEY, jsonValue);
+      } catch (error) {
+        console.error("Failed to save tasks to storage", error);
+      }
+    };
+    saveTasks();
+  }, [tasks, isLoaded]); // Runs every time 'tasks' changes
 
   // Modal State
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDesc, setNewTaskDesc] = useState('');
   const [newTaskColor, setNewTaskColor] = useState(DEFAULT_COLOR);
-  
-  // NEW: Track if we are editing an existing task
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
-  // Helper to completely reset and close the modal
   const closeModal = () => {
     setIsModalVisible(false);
     setEditingTaskId(null);
@@ -53,7 +88,6 @@ export default function AppBoard() {
     setNewTaskColor(DEFAULT_COLOR);
   };
 
-  // Pre-fill the modal with the task's current data
   const handleEditTask = (task: Task) => {
     setEditingTaskId(task.id);
     setNewTaskTitle(task.title);
@@ -70,14 +104,12 @@ export default function AppBoard() {
     }
 
     if (editingTaskId) {
-      // UPDATE EXISTING TASK
       setTasks(prevTasks => prevTasks.map(task => 
         task.id === editingTaskId 
           ? { ...task, title: newTaskTitle, description: newTaskDesc, color: newTaskColor } 
           : task
       ));
     } else {
-      // CREATE NEW TASK
       const newTask: Task = {
         id: Math.random().toString(),
         title: newTaskTitle,
@@ -87,7 +119,6 @@ export default function AppBoard() {
       };
       setTasks([...tasks, newTask]);
     }
-    
     closeModal();
   };
 
@@ -129,13 +160,17 @@ export default function AppBoard() {
               task={task} 
               onMove={handleMoveTask} 
               onDelete={handleDeleteTask} 
-              onEdit={handleEditTask} // Passed down here!
+              onEdit={handleEditTask} 
             />
           ))}
         </ScrollView>
       </View>
     );
   };
+
+  // Don't render the board until we've checked the hard drive, 
+  // otherwise you'll see a flash of an empty board.
+  if (!isLoaded) return null; 
 
   return (
     <SafeAreaView style={styles.container}>
@@ -152,7 +187,6 @@ export default function AppBoard() {
       <Modal visible={isModalVisible} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {/* Dynamic Title based on context */}
             <Text style={styles.modalTitle}>{editingTaskId ? "Edit Task" : "New Task"}</Text>
             
             <TextInput style={styles.input} placeholder="Task Title" value={newTaskTitle} onChangeText={setNewTaskTitle} />
@@ -181,7 +215,6 @@ export default function AppBoard() {
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveButton} onPress={handleSaveTask}>
-                {/* Dynamic Button Text */}
                 <Text style={styles.saveText}>{editingTaskId ? "Save Changes" : "Save Task"}</Text>
               </TouchableOpacity>
             </View>
@@ -200,18 +233,15 @@ const styles = StyleSheet.create({
   column: { width: COLUMN_WIDTH, marginHorizontal: 5, backgroundColor: '#eef1f5', borderRadius: 12, padding: 5 },
   columnTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#333', textAlign: 'center' },
   taskList: { flex: 1 },
-  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { backgroundColor: '#fff', borderRadius: 12, padding: 24, width: 500, maxWidth: '90%' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
   input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, marginBottom: 15, fontSize: 16 },
   textArea: { height: 80, textAlignVertical: 'top' },
-  
   colorLabel: { fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
   colorBoard: { marginBottom: 20, gap: 6 },
   colorRow: { flexDirection: 'row', justifyContent: 'space-between' },
   colorCell: { width: 26, height: 26, borderRadius: 4, borderWidth: 2 },
-
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
   cancelButton: { flex: 1, padding: 15, backgroundColor: '#f0f0f0', borderRadius: 8, marginRight: 10, alignItems: 'center' },
   cancelText: { color: '#333', fontWeight: 'bold' },
